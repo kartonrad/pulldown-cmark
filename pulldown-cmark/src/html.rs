@@ -21,6 +21,7 @@
 //! HTML renderer that takes an iterator of events as input.
 
 use alloc::{string::String, vec::Vec};
+use core::ops::Deref;
 #[cfg(all(feature = "std", not(feature = "hashbrown")))]
 use std::collections::HashMap;
 
@@ -250,6 +251,10 @@ where
                         BlockQuoteKind::Important => " class=\"markdown-alert-important\"",
                         BlockQuoteKind::Warning => " class=\"markdown-alert-warning\"",
                         BlockQuoteKind::Caution => " class=\"markdown-alert-caution\"",
+                        BlockQuoteKind::Other(cow_str) => &format!(
+                            " class=\"markdown-alert-custom--{}\"",
+                            cow_str.deref().to_lowercase()
+                        ),
                     },
                 };
                 if self.end_newline {
@@ -428,7 +433,7 @@ where
                 }
                 self.table_cell_index += 1;
             }
-            TagEnd::BlockQuote(_) => {
+            TagEnd::BlockQuote => {
                 self.write("</blockquote>\n")?;
             }
             TagEnd::CodeBlock => {

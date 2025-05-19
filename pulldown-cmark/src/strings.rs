@@ -20,7 +20,7 @@ pub struct StringTooLongError;
 
 /// An inline string that can contain almost three words
 /// of utf-8 text.
-#[derive(Debug, Clone, Copy, Eq)]
+#[derive(Debug, Clone, Copy, Eq, Ord)]
 pub struct InlineStr {
     inner: [u8; MAX_INLINE_STR_LEN],
     len: u8,
@@ -50,6 +50,12 @@ impl From<char> for InlineStr {
 impl core::cmp::PartialEq<InlineStr> for InlineStr {
     fn eq(&self, other: &InlineStr) -> bool {
         self.deref() == other.deref()
+    }
+}
+
+impl core::cmp::PartialOrd<InlineStr> for InlineStr {
+    fn partial_cmp(&self, other: &InlineStr) -> Option<core::cmp::Ordering> {
+        self.deref().partial_cmp(&*other)
     }
 }
 
@@ -88,7 +94,7 @@ impl fmt::Display for InlineStr {
 /// or inlined.
 ///
 /// It is three words long.
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, PartialOrd, Ord)]
 pub enum CowStr<'a> {
     /// An owned, immutable string.
     Boxed(Box<str>),

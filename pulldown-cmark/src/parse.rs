@@ -113,7 +113,7 @@ pub(crate) enum ItemBody {
     FencedCodeBlock(CowIndex),
     IndentCodeBlock,
     HtmlBlock,
-    BlockQuote(Option<BlockQuoteKind>),
+    BlockQuote(Option<BlockQuoteKindIndex>),
     List(bool, u8, u64), // is_tight, list character, list start index
     ListItem(usize),     // indent level
     FootnoteDefinition(CowIndex),
@@ -180,6 +180,17 @@ impl ItemBody {
                 | HardBreak(..)
         )
     }
+}
+
+/// BlockQuote kind (Note, Tip, Important, Warning, Caution, or Other...).
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BlockQuoteKindIndex {
+    Note,
+    Tip,
+    Important,
+    Warning,
+    Caution,
+    Other(CowIndex),
 }
 
 #[derive(Debug)]
@@ -2244,7 +2255,7 @@ fn body_to_tag_end(body: &ItemBody) -> TagEnd {
         ItemBody::Image(..) => TagEnd::Image,
         ItemBody::Heading(level, _) => TagEnd::Heading(level),
         ItemBody::IndentCodeBlock | ItemBody::FencedCodeBlock(..) => TagEnd::CodeBlock,
-        ItemBody::BlockQuote(kind) => TagEnd::BlockQuote(kind),
+        ItemBody::BlockQuote(_) => TagEnd::BlockQuote,
         ItemBody::HtmlBlock => TagEnd::HtmlBlock,
         ItemBody::List(_, c, _) => {
             let is_ordered = c == b'.' || c == b')';
@@ -2324,7 +2335,16 @@ fn item_to_event<'a>(item: Item, text: &'a str, allocs: &mut Allocations<'a>) ->
             Tag::CodeBlock(CodeBlockKind::Fenced(allocs.take_cow(cow_ix)))
         }
         ItemBody::IndentCodeBlock => Tag::CodeBlock(CodeBlockKind::Indented),
-        ItemBody::BlockQuote(kind) => Tag::BlockQuote(kind),
+        ItemBody::BlockQuote(kind) => Tag::BlockQuote(kind.map(|k| match k {
+            BlockQuoteKindIndex::Note => BlockQuoteKind::Note,
+            BlockQuoteKindIndex::Tip => BlockQuoteKind::Tip,
+            BlockQuoteKindIndex::Important => BlockQuoteKind::Important,
+            BlockQuoteKindIndex::Warning => BlockQuoteKind::Warning,
+            BlockQuoteKindIndex::Caution => BlockQuoteKind::Caution,
+            BlockQuoteKindIndex::Other(cow_index) => {
+                BlockQuoteKind::Other(allocs.take_cow(cow_index))
+            }
+        })),
         ItemBody::List(_, c, listitem_start) => {
             if c == b'.' || c == b')' {
                 Tag::List(Some(listitem_start))
@@ -2871,7 +2891,7 @@ text
             Event::Start(Tag::Paragraph),
             Event::InlineHtml(CowStr::Boxed("<foo\nbar>".to_string().into())),
             Event::End(TagEnd::Paragraph),
-            Event::End(TagEnd::BlockQuote(None)),
+            Event::End(TagEnd::BlockQuote),
         ];
         assert_eq!(&events, &expected);
     }

@@ -21,14 +21,16 @@
 //! Scanners for fragments of CommonMark syntax
 
 use alloc::{string::String, vec::Vec};
-use core::char;
+use core::{char, str};
 
 use memchr::memchr;
 
 pub(crate) use crate::puncttable::{is_ascii_punctuation, is_punctuation};
 use crate::{
-    entities, parse::HtmlScanGuard, strings::CowStr, Alignment, BlockQuoteKind, HeadingLevel,
-    LinkType,
+    entities,
+    parse::{Allocations, BlockQuoteKindIndex, HtmlScanGuard},
+    strings::CowStr,
+    Alignment, HeadingLevel, LinkType,
 };
 
 // sorted for binary search
@@ -225,21 +227,38 @@ impl<'a> LineStart<'a> {
         ok
     }
 
-    pub(crate) fn scan_blockquote_tag(&mut self) -> Option<BlockQuoteKind> {
+    pub(crate) fn scan_blockquote_tag(
+        &mut self,
+        allocs: &mut Allocations<'a>,
+    ) -> Option<BlockQuoteKindIndex> {
         let saved_ix = self.ix;
         let tag = if self.scan_ch(b'[') && self.scan_ch(b'!') {
             let tag = if self.scan_case_insensitive(b"note") {
-                Some(BlockQuoteKind::Note)
+                Some(BlockQuoteKindIndex::Note)
             } else if self.scan_case_insensitive(b"tip") {
-                Some(BlockQuoteKind::Tip)
+                Some(BlockQuoteKindIndex::Tip)
             } else if self.scan_case_insensitive(b"important") {
-                Some(BlockQuoteKind::Important)
+                Some(BlockQuoteKindIndex::Important)
             } else if self.scan_case_insensitive(b"warning") {
-                Some(BlockQuoteKind::Warning)
+                Some(BlockQuoteKindIndex::Warning)
             } else if self.scan_case_insensitive(b"caution") {
-                Some(BlockQuoteKind::Caution)
+                Some(BlockQuoteKindIndex::Caution)
             } else {
-                None
+                let wordlen = self.bytes[self.ix..]
+                    .iter()
+                    .take_while(|&&b| b >= b'a' && b <= b'z' || b >= b'A' && b <= b'Z')
+                    .count();
+                let word = &self.bytes[self.ix..self.ix + wordlen];
+                self.ix += wordlen;
+
+                match str::from_utf8(word) {
+                    Ok(wordstr) => {
+                        let wordindex = allocs.allocate_cow(CowStr::Borrowed(wordstr));
+
+                        Some(BlockQuoteKindIndex::Other(wordindex))
+                    }
+                    Err(_) => None,
+                }
             };
             if tag.is_some() && self.scan_ch(b']') {
                 if let Some(nl) = scan_blank_line(&self.bytes[self.ix..]) {

@@ -147,15 +147,29 @@ impl<'a> CodeBlockKind<'a> {
     }
 }
 
-/// BlockQuote kind (Note, Tip, Important, Warning, Caution).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// BlockQuote kind (Note, Tip, Important, Warning, Caution, or Other...).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum BlockQuoteKind {
+pub enum BlockQuoteKind<'a> {
     Note,
     Tip,
     Important,
     Warning,
     Caution,
+    Other(CowStr<'a>),
+}
+
+impl<'a> BlockQuoteKind<'a> {
+    pub fn into_static(self) -> BlockQuoteKind<'static> {
+        match self {
+            BlockQuoteKind::Other(other_kind) => BlockQuoteKind::Other(other_kind.into_static()),
+            BlockQuoteKind::Note => BlockQuoteKind::Note,
+            BlockQuoteKind::Tip => BlockQuoteKind::Tip,
+            BlockQuoteKind::Important => BlockQuoteKind::Important,
+            BlockQuoteKind::Warning => BlockQuoteKind::Warning,
+            BlockQuoteKind::Caution => BlockQuoteKind::Caution,
+        }
+    }
 }
 
 /// Metadata block kind.
@@ -197,7 +211,7 @@ pub enum Tag<'a> {
     /// > [!NOTE]
     /// > note quote
     /// ```
-    BlockQuote(Option<BlockQuoteKind>),
+    BlockQuote(Option<BlockQuoteKind<'a>>),
     /// A code block.
     CodeBlock(CodeBlockKind<'a>),
 
@@ -310,7 +324,7 @@ impl<'a> Tag<'a> {
         match self {
             Tag::Paragraph => TagEnd::Paragraph,
             Tag::Heading { level, .. } => TagEnd::Heading(*level),
-            Tag::BlockQuote(kind) => TagEnd::BlockQuote(*kind),
+            Tag::BlockQuote(_) => TagEnd::BlockQuote,
             Tag::CodeBlock(_) => TagEnd::CodeBlock,
             Tag::HtmlBlock => TagEnd::HtmlBlock,
             Tag::List(number) => TagEnd::List(number.is_some()),
@@ -351,7 +365,7 @@ impl<'a> Tag<'a> {
                     .map(|(k, v)| (k.into_static(), v.map(|s| s.into_static())))
                     .collect(),
             },
-            Tag::BlockQuote(k) => Tag::BlockQuote(k),
+            Tag::BlockQuote(k) => Tag::BlockQuote(k.map(|k| k.into_static())),
             Tag::CodeBlock(kb) => Tag::CodeBlock(kb.into_static()),
             Tag::HtmlBlock => Tag::HtmlBlock,
             Tag::List(v) => Tag::List(v),
@@ -397,13 +411,13 @@ impl<'a> Tag<'a> {
 }
 
 /// The end of a `Tag`.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TagEnd {
     Paragraph,
     Heading(HeadingLevel),
 
-    BlockQuote(Option<BlockQuoteKind>),
+    BlockQuote,
     CodeBlock,
 
     HtmlBlock,

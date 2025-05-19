@@ -228,7 +228,7 @@ impl<'a, 'b> FirstPass<'a, 'b> {
                 }
             } else if line_start.scan_blockquote_marker() {
                 let kind = if self.options.contains(Options::ENABLE_GFM) {
-                    line_start.scan_blockquote_tag()
+                    line_start.scan_blockquote_tag(&mut self.allocs)
                 } else {
                     None
                 };
